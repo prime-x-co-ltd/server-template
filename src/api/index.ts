@@ -3,6 +3,7 @@ import { Router } from 'express'
 
 /**Types */
 import { Auth } from '../auth'
+import { S3 } from 'aws-sdk'
 
 import fs from 'fs'
 import path from 'path'
@@ -29,8 +30,7 @@ export default ({ client, s3 }: Auth) => {
 	})
 
 	// upload single-file to S3
-	api.post('/upload', (req, res, next) => {
-		console.log('received')
+	api.post('/upload', (req, res) => {
 		const upload = multer({
 			storage: multer.diskStorage({
 				destination: './temp',
@@ -38,11 +38,23 @@ export default ({ client, s3 }: Auth) => {
 					callback(null, file.originalname)
 				},
 			}),
-		}).array('uploadFile', 1)
+		}).single('uploadFile')
 
-		upload(req, res, () => {
-			console.log(req.files)
-			res.status(200).send({ message: 'success' })
+		// @types/multerの型定義がかなり胡散臭いのでやむなし。。
+		// @ts-ignore
+		upload(req, res, (err) => {
+			if (err) res.status(500).send({ message: 'Error uploading file.' })
+
+			const fileContent = fs.readFileSync(path.resolve(req.file.path))
+			const params: S3.Types.PutObjectRequest = {
+				Bucket: process.env.BUCKET as string,
+				Key: req.file.filename,
+				Body: fileContent,
+			}
+			s3.upload(params, (err, data) => {
+				if (err) throw err
+				res.status(200).send({ url: data.Location })
+			})
 		})
 	})
 
