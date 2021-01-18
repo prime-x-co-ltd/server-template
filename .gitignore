@@ -102,3 +102,9 @@ dist
 
 # TernJS port file
 .tern-port
+
+# HTTPS
+ssl/
+
+# S3
+temp/
